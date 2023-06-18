@@ -548,7 +548,7 @@ negative_color:RED\n""")
 	while True:
 		clear()
 		dataText = getDataText()
-		table = drawTable(heading, dataText, colors)
+		table = 'Sur le contexte : "'+curCtx+'"\n'+drawTable(heading, dataText, colors)
 		print(table)
 		purchaseMode = ask("""Faites + pour ajouter une transaction
 Faites - pour supprimer la dernière transaction
