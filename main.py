@@ -2,23 +2,23 @@
 #################### IMPORTS #####################
 ##################################################
 
-from time import time as time
-from time import strftime as time_strftime
-from time import mktime as time_mktime
-from time import localtime as time_localtime
-
 from os.path import exists as os_path_exists
 from os import remove as os_remove
 from os import system as os_system
 from os import name as os_name
 from os import listdir, mkdir
 
+from time import localtime as time_localtime
+from time import strftime as time_strftime
+from time import mktime as time_mktime
+from time import time as time
+
 from re import match as re_match
 from re import sub as re_sub
 
-from datetime import datetime
+from colorama import Fore, Back
 
-from colorama import Fore, Back ############# REPLACE RGB
+from datetime import datetime
 
 ##################################################
 ################## PREPARATION ###################
@@ -389,8 +389,17 @@ def getWidths(data):
 
 # créé le tableau ascii
 def drawTable(heading, dat, colors, color = "CYN", borderColor = "LBLK"):
+	global curCtx
 	colsWidth = getWidths([heading]+dat)
 	tables = ""
+	labels = {}
+
+	# récupération des labels
+	with open("ctx/"+curCtx+"/colors", "r", encoding = "utf-8") as f:
+		for i in f.readlines():
+			if (not i.startswith("#") and ":" in i):
+				i = i.split(":")
+				labels[i[0]] = i[1].strip()
 
 	for data in dat:
 		# traitements visuels interne
@@ -400,9 +409,23 @@ def drawTable(heading, dat, colors, color = "CYN", borderColor = "LBLK"):
 		table = "\n"+drawRowLine(heading, colsWidth, borderColor, "down")+"\n"+table
 		table += "\n"+drawRowLine(heading, colsWidth, borderColor, "mid")
 
+		graphData, graphDataTotal = {}, 0
+
 		# DEBUT DU CONTENU
-		for line in data:
-			table += "\n"+drawRowContent(line, colsWidth, colors)
+		for lineIndex in range(len(data)):
+			table += "\n"+drawRowContent(data[lineIndex], colsWidth, colors)
+
+			# graphData
+			line = [cancelColor(i).strip() for i in data[lineIndex]]
+
+			# si le libelle n'existe pas on le créé
+			if (line[1] not in graphData.keys()):
+				graphData[line[1]] = 0
+
+			# addition dépense (si dépense)
+			if (line[0][0] == "-"):
+				graphData[line[1]] += float(line[0][1:].strip(" €").replace(",", "."))
+				graphDataTotal += graphData[line[1]]
 
 		# FIN DU CONTENU
 		table += "\n"+drawRowLine(heading, colsWidth, borderColor)
@@ -410,8 +433,28 @@ def drawTable(heading, dat, colors, color = "CYN", borderColor = "LBLK"):
 		# TRAITEMENTS FINAUX
 		table = table.replace("║", "@"+borderColor+"║@RST")
 		table = colorize(table)
-		tables += table
-	
+		tables += table+"\n"
+
+		# génération du graph
+		l = len([i for i in table.split("\n")[1].strip() if i in ("╔","═","╦","╗")])
+		k_to_rm = []
+
+		for k in graphData.keys():
+			if (graphDataTotal > 0): graphData[k] = round((graphData[k] / graphDataTotal) * l)
+			else: k_to_rm.append(k)
+
+		for k in k_to_rm: del graphData[k]
+
+		for i in sorted(graphData.keys()):
+			if (i in labels):
+				tmp = "@@"+getCol(labels[i])
+			else:
+				tmp = "@@LWHT@BLK"
+
+			tables += colorize(tmp+"║"+i+((graphData[i] - len(i) - 1) * " ")+"@@RST@RST")
+
+		tables += "\n"
+
 	return tables
 
 # input amélioré
@@ -536,7 +579,16 @@ negative_color:RED\n""")
 
 	createFileIfNotExist("ctx/"+curCtx+"/data")
 	createFileIfNotExist("ctx/"+curCtx+"/colors", """# Accentue chaque occurrence d'un libelle spécifique.
-# Syntaxe : <libelle>:<couleur>, ex : extra:violet\n""")
+# Syntaxe : <libelle>:<couleur>, ex : extra:violet
+# Liste des couleurs :
+# rouge
+# vert
+# bleu
+# noir
+# blanc
+# cyan / aqua / bleu clair / bleu ciel
+# magenta / violet / rose
+# jaune / orange\n""")
 	config = readFile("ctx/"+curCtx+"/config", True) # récupération de la config
 	colors = readFile("ctx/"+curCtx+"/colors") # récupération des couleurs
 
@@ -562,7 +614,7 @@ Faites q pour quitter le contexte""", table)
 			)
 			purchase[1] = ask(
 				"Saisissez la somme",
-				table, r'^[+-]?\d+([.,]\d+)?$'
+				table, r'^(?!0(\.0+)?$)[+-]?\d+(\.\d+)?$'
 			)
 			purchase[2] = ask("Saisissez le libelle", table)
 			purchase[3] = ask("Saisissez l'organisation", table)
